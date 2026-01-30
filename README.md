@@ -1,6 +1,7 @@
 # Library Management System
 
 A console-based library management system built with Java and PostgreSQL.
+
 Creators: Zharylgapova Dayana, Alish Medina, Nurtas Akmarzhan, Asylkhan Tolganay
 
 ## Features
