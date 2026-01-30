@@ -19,7 +19,7 @@ public class FineService {
     public User currentUser;
 
     private static final float LOST_BOOK_FINE = 10000.0f;
-    private static final float DAILY_FINE_RATE = 1000.0f; // 1000 тг за день просрочки
+    private static final float DAILY_FINE_RATE = 1000.0f;
 
     public FineService(UserRepository userRepository,
                        BorrowsRepository borrowsRepository,
@@ -42,58 +42,65 @@ public class FineService {
         }
 
         String userId = currentUser.getUserId();
-        List<Borrows> userBorrows = borrowsRepository.findByUserId(userId);
-        float totalFinesToAdd = 0.0f;
 
-        System.out.println("Fines found: " + userBorrows.size());
+        List<Borrows> userBorrows = borrowsRepository.findByUserId(userId);
+        float totalCalculatedFines = 0.0f;
 
         for (Borrows borrow : userBorrows) {
-            System.out.println("Loan processing #" + borrow.getId() +
-                    " (status: " + borrow.getStatus() + ")");
+            float calculatedFine = calculateFineForBorrow(borrow);
+            totalCalculatedFines += calculatedFine;
 
-            float newFine = 0.0f;
-
-            if ("LOST".equals(borrow.getStatus())) {
-                newFine = LOST_BOOK_FINE;
-                System.out.println("  Lost: fine " + newFine + " tenge");
-            }
-            else if ("OVERDUE".equals(borrow.getStatus())) {
-                int daysExtended = borrow.getDaysExtended();
-                if (daysExtended > 0) {
-                    newFine = daysExtended * DAILY_FINE_RATE;
-                    System.out.println("  Overdue: " + daysExtended +
-                            " days * " + DAILY_FINE_RATE +
-                            " = " + newFine + " tenge");
-                } else {
-                    newFine = calculateDaysFromDates(borrow) * DAILY_FINE_RATE;
-                    System.out.println("  Overdue (by dates): " + newFine + " tenge");
-                }
-            }
-
-            else if ("RETURNED".equals(borrow.getStatus()) &&
-                    borrow.getReturnDate() != null &&
-                    borrow.getReturnDate().after(borrow.getDueDate())) {
-                int daysExtended = borrow.getDaysExtended();
-                if (daysExtended > 0) {
-                    newFine = daysExtended * DAILY_FINE_RATE;
-                    System.out.println(" Returned late: " + newFine + " tenge");
-                }
-            }
-
-            if (newFine > 0 && newFine != borrow.getFineAmount()) {
-                borrowsRepository.updateFine(borrow.getId(), newFine);
-                totalFinesToAdd += newFine;
+            if (borrow.getFineAmount() != calculatedFine) {
+                borrowsRepository.updateFine(borrow.getId(), calculatedFine);
             }
         }
-        userRepository.updateFines(userId, 0);
-        if (totalFinesToAdd > 0) {
 
-            userRepository.updateFines(userId, totalFinesToAdd);
-            System.out.println("Total added to user's fines: " + totalFinesToAdd + " тг");
-        } else {
-            System.out.println("There are no new fines to add");
+        setUserFinesDirectly(userId, totalCalculatedFines);
+    }
+
+    private float calculateFineForBorrow(Borrows borrow) {
+        if ("LOST".equals(borrow.getStatus())) {
+            System.out.println("Loan #" + borrow.getId() + ": LOST = " + LOST_BOOK_FINE + " тг");
+            return LOST_BOOK_FINE;
         }
 
+        if ("OVERDUE".equals(borrow.getStatus())) {
+            int days = borrow.getDaysExtended() > 0 ?
+                    borrow.getDaysExtended() :
+                    calculateDaysFromDates(borrow);
+            float fine = days * DAILY_FINE_RATE;
+            System.out.println("Loan #" + borrow.getId() + ": OVERDUE " + days + " days = " + fine + " тг");
+            return fine;
+        }
+
+        if ("RETURNED".equals(borrow.getStatus()) &&
+                borrow.getReturnDate() != null &&
+                borrow.getReturnDate().after(borrow.getDueDate())) {
+            int days = borrow.getDaysExtended() > 0 ?
+                    borrow.getDaysExtended() :
+                    calculateDaysFromDates(borrow);
+            float fine = days * DAILY_FINE_RATE;
+            System.out.println("Loan #" + borrow.getId() + ": RETURNED LATE " + days + " days = " + fine + " тг");
+            return fine;
+        }
+
+        return 0.0f;
+    }
+
+    private void setUserFinesDirectly(String userId, float amount) {
+        try {
+            java.sql.Connection con = dao.DatabaseConnection.getConnection();
+            java.sql.PreparedStatement stmt = con.prepareStatement(
+                    "UPDATE users SET fines = ? WHERE user_id = ?"
+            );
+            stmt.setFloat(1, amount);
+            stmt.setString(2, userId);
+            stmt.executeUpdate();
+            stmt.close();
+            con.close();
+        } catch (Exception e) {
+            System.err.println("Error setting fines: " + e.getMessage());
+        }
     }
 
     private int calculateDaysFromDates(Borrows borrow) {
@@ -126,7 +133,8 @@ public class FineService {
             return;
         }
 
-        System.out.println("\nTotal Fines: " + userRepository.getUserFines(currentUser.getUserId()) + " tenge");
+        float totalFines = userRepository.getUserFines(currentUser.getUserId());
+        System.out.println("\nTotal Fines: " + totalFines + " tenge");
 
         List<Borrows> userBorrows = borrowsRepository.findByUserId(currentUser.getUserId());
 
@@ -138,6 +146,5 @@ public class FineService {
                         "): " + borrow.getFineAmount() + " tenge");
             }
         }
-
     }
 }
