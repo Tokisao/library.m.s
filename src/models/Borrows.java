@@ -53,4 +53,12 @@ public class Borrows {
     public int getDaysExtended(){
         return days_extended;
     }
+
+    public String getUserId() {
+        return user_id;
+    }
+
+    public int getBookId() {
+        return book_id;
+    }
 }
