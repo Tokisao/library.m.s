@@ -23,6 +23,8 @@ public class Authentication {
 
         if (user.isPresent()) {
             System.out.println("Login successful!");
+            System.out.println("Welcome, " + user.get().getFirstName() + " " +
+                    user.get().getLastName() + " (" + user.get().getRole() + ")");
             return user;
         } else {
             System.out.println("Invalid credentials. Try again.");
