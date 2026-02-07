@@ -49,8 +49,7 @@ public class BorrowsRepository {
                 "u.first_name, u.second_name " +
                 "FROM borrows br " +
                 "JOIN book b ON br.book_id = b.book_id " +
-                "JOIN users u ON br.user_id = u.user_id " +
-                "WHERE br.id = ?";
+                "JOIN users u ON br.user_id = u.user_id ";
 
         try (Connection con = DatabaseConnection.getConnection();
              PreparedStatement stmt = con.prepareStatement(sql)) {
@@ -133,20 +132,6 @@ public class BorrowsRepository {
             return stmt.executeUpdate() > 0;
         } catch (SQLException e) {
             System.err.println("Error returning book: " + e.getMessage());
-            return false;
-        }
-    }
-
-    public boolean markAsLost(int borrowId) {
-        String sql = "UPDATE borrows SET status = 'LOST' WHERE id = ?";
-
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement stmt = con.prepareStatement(sql)) {
-
-            stmt.setInt(1, borrowId);
-            return stmt.executeUpdate() > 0;
-        } catch (SQLException e) {
-            System.err.println("Error marking book as lost: " + e.getMessage());
             return false;
         }
     }
