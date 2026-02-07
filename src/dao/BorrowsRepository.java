@@ -41,39 +41,45 @@ public class BorrowsRepository {
         return borrows;
     }
 
-    public Borrows getFullBorrowInfo(int borrowId) {
-        String sql = "SELECT br.id, br.book_id, br.user_id, br.borrowed_date, " +
+    public List<Borrows.BorrowDetails> getFullBorrowInfo() {
+        String sql = "SELECT br.id, b.book_id, b.name as book_name,b.author as book_author,b.category,u.user_id,u.first_name,u.second_name,u.phone_number, br.borrowed_date, " +
                 "br.due_date, br.returned_day, br.days_extended, " +
-                "br.fine_amount, br.status, " +
-                "b.name as book_name, b.author as book_author, " +
-                "u.first_name, u.second_name " +
+                "br.fine_amount, br.status " +
                 "FROM borrows br " +
                 "JOIN book b ON br.book_id = b.book_id " +
                 "JOIN users u ON br.user_id = u.user_id ";
 
+        List<Borrows.BorrowDetails> borrows = new ArrayList<>();
+
         try (Connection con = DatabaseConnection.getConnection();
              PreparedStatement stmt = con.prepareStatement(sql)) {
 
-            stmt.setInt(1, borrowId);
 
             try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    return new Borrows(
+                while (rs.next()) {
+                    borrows.add(new Borrows.BorrowDetails(
                             rs.getInt("id"),
                             rs.getInt("book_id"),
+                            rs.getString("book_name"),
+                            rs.getString("book_author"),
+                            rs.getString("category"),
                             rs.getString("user_id"),
+                            rs.getString("first_name"),
+                            rs.getString("second_name"),
+                            rs.getString("phone_number"),
                             rs.getDate("borrowed_date"),
                             rs.getDate("due_date"),
                             rs.getDate("returned_day"),
                             rs.getInt("days_extended"),
+                            rs.getFloat("fine_amount"),
                             rs.getString("status")
-                    );
+                    ));
                 }
             }
         } catch (SQLException e) {
             System.err.println("Error getting full borrow info: " + e.getMessage());
         }
-        return null;
+        return borrows;
     }
 
     public boolean createBorrow(int bookId, String userId, Date dueDate) {
