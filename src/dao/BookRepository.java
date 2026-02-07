@@ -1,15 +1,27 @@
 package dao;
 
 import models.Book;
+import factories.ValidatorFactory;
+import validators.BookValidator;
+import util.ValidationResult;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
 public class BookRepository {
+    private final ValidatorFactory validatorFactory;
+
+    public BookRepository() {
+        this.validatorFactory = new ValidatorFactory();
+    }
+
+    public BookRepository(ValidatorFactory validatorFactory) {
+        this.validatorFactory = validatorFactory;
+    }
 
     public List<Book> findAll() {
         List<Book> books = new ArrayList<>();
-        String sql = "SELECT book_id, name, author, description, available_copies, category FROM book ORDER BY book_id";
+        String sql = "SELECT book_id, name, author, description, available_copies, total_copies, category FROM book ORDER BY book_id";
 
         try (Connection con = DatabaseConnection.getConnection();
              Statement stmt = con.createStatement();
@@ -22,6 +34,7 @@ public class BookRepository {
                         rs.getString("author"),
                         rs.getString("description"),
                         rs.getInt("available_copies"),
+                        rs.getInt("total_copies"),
                         rs.getString("category")
                 ));
             }
@@ -32,10 +45,9 @@ public class BookRepository {
     }
 
     public Book findById(int bookId) {
-        String sql = "SELECT book_id, name, author, description, available_copies, category FROM book WHERE book_id = ?";
+        String sql = "SELECT book_id, name, author, description, available_copies, total_copies, category FROM book WHERE book_id = ?";
 
-        try (Connection con = DriverManager.getConnection(
-                DatabaseConnection.URL, DatabaseConnection.USERNAME, DatabaseConnection.PASSWORD);
+        try (Connection con = DatabaseConnection.getConnection();
              PreparedStatement stmt = con.prepareStatement(sql)) {
 
             stmt.setInt(1, bookId);
@@ -48,6 +60,7 @@ public class BookRepository {
                             rs.getString("author"),
                             rs.getString("description"),
                             rs.getInt("available_copies"),
+                            rs.getInt("total_copies"),
                             rs.getString("category")
                     );
                 }
@@ -61,8 +74,7 @@ public class BookRepository {
     public boolean updateAvailableCopies(int bookId, int change) {
         String sql = "UPDATE book SET available_copies = available_copies + ? WHERE book_id = ? AND available_copies + ? >= 0";
 
-        try (Connection con = DriverManager.getConnection(
-                DatabaseConnection.URL, DatabaseConnection.USERNAME, DatabaseConnection.PASSWORD);
+        try (Connection con = DatabaseConnection.getConnection();
              PreparedStatement stmt = con.prepareStatement(sql)) {
 
             stmt.setInt(1, change);
@@ -77,6 +89,45 @@ public class BookRepository {
     }
 
     public boolean createBook(String title, String author, String description, int totalCopies, String category) {
+        // НОВАЯ ВАЛИДАЦИЯ
+        BookValidator validator = validatorFactory.getBookValidator();
+        ValidationResult result = new ValidationResult();
+
+        ValidationResult titleResult = validator.validateField("title", title);
+        if (titleResult.hasErrors()) {
+            result.getErrors().addAll(titleResult.getErrors());
+        }
+
+        ValidationResult authorResult = validator.validateField("author", author);
+        if (authorResult.hasErrors()) {
+            result.getErrors().addAll(authorResult.getErrors());
+        }
+
+        if (description != null && !description.isEmpty()) {
+            ValidationResult descResult = validator.validateField("description", description);
+            if (descResult.hasErrors()) {
+                result.getErrors().addAll(descResult.getErrors());
+            }
+        }
+
+        ValidationResult categoryResult = validator.validateField("category", category);
+        if (categoryResult.hasErrors()) {
+            result.getErrors().addAll(categoryResult.getErrors());
+        }
+
+        ValidationResult copiesResult = validator.validateCopies(totalCopies);
+        if (copiesResult.hasErrors()) {
+            result.getErrors().addAll(copiesResult.getErrors());
+        }
+
+        if (result.hasErrors()) {
+            System.err.println("Book validation failed:");
+            for (String error : result.getErrors()) {
+                System.err.println("  - " + error);
+            }
+            return false;
+        }
+
         String sql = "INSERT INTO book (name, author, description, total_copies, available_copies, category) " +
                 "VALUES (?, ?, ?, ?, ?, ?)";
 
@@ -87,7 +138,7 @@ public class BookRepository {
             stmt.setString(2, author);
             stmt.setString(3, description);
             stmt.setInt(4, totalCopies);
-            stmt.setInt(5, totalCopies);
+            stmt.setInt(5, totalCopies); // При создании available_copies = total_copies
             stmt.setString(6, category);
 
             int rowsAffected = stmt.executeUpdate();
@@ -99,9 +150,66 @@ public class BookRepository {
         }
     }
 
-    public boolean updateBook(int bookId, String title, String author, String description, int totalCopies, String category) {
+    public boolean updateBook(int bookId, String title, String author, String description,
+                              int availableCopies, int totalCopies, String category) {
+        // НОВАЯ ВАЛИДАЦИЯ
+        BookValidator validator = validatorFactory.getBookValidator();
+        ValidationResult result = new ValidationResult();
+
+        ValidationResult bookIdResult = validator.validateBookId(bookId);
+        if (bookIdResult.hasErrors()) {
+            result.getErrors().addAll(bookIdResult.getErrors());
+        }
+
+        ValidationResult titleResult = validator.validateField("title", title);
+        if (titleResult.hasErrors()) {
+            result.getErrors().addAll(titleResult.getErrors());
+        }
+
+        ValidationResult authorResult = validator.validateField("author", author);
+        if (authorResult.hasErrors()) {
+            result.getErrors().addAll(authorResult.getErrors());
+        }
+
+        if (description != null && !description.isEmpty()) {
+            ValidationResult descResult = validator.validateField("description", description);
+            if (descResult.hasErrors()) {
+                result.getErrors().addAll(descResult.getErrors());
+            }
+        }
+
+        ValidationResult categoryResult = validator.validateField("category", category);
+        if (categoryResult.hasErrors()) {
+            result.getErrors().addAll(categoryResult.getErrors());
+        }
+
+        // Валидация availableCopies
+        ValidationResult availableCopiesResult = validator.validateCopies(availableCopies);
+        if (availableCopiesResult.hasErrors()) {
+            result.getErrors().addAll(availableCopiesResult.getErrors());
+        }
+
+        // Валидация totalCopies
+        ValidationResult totalCopiesResult = validator.validateCopies(totalCopies);
+        if (totalCopiesResult.hasErrors()) {
+            result.getErrors().addAll(totalCopiesResult.getErrors());
+        }
+
+        // Дополнительная проверка: availableCopies не может быть больше totalCopies
+        if (availableCopies > totalCopies) {
+            result.addError("Available copies (" + availableCopies + ") cannot exceed total copies (" + totalCopies + ")");
+        }
+
+        if (result.hasErrors()) {
+            System.err.println("Book validation failed:");
+            for (String error : result.getErrors()) {
+                System.err.println("  - " + error);
+            }
+            return false;
+        }
+
         String sql = "UPDATE book SET name = ?, author = ?, description = ?, " +
-                "total_copies = ?, category = ? WHERE book_id = ?";
+                "available_copies = ?, total_copies = ?, category = ? WHERE book_id = ?";
 
         try (Connection con = DatabaseConnection.getConnection();
              PreparedStatement stmt = con.prepareStatement(sql)) {
@@ -109,9 +217,10 @@ public class BookRepository {
             stmt.setString(1, title);
             stmt.setString(2, author);
             stmt.setString(3, description);
-            stmt.setInt(4, totalCopies);
-            stmt.setString(5, category);
-            stmt.setInt(6, bookId);
+            stmt.setInt(4, availableCopies);
+            stmt.setInt(5, totalCopies);
+            stmt.setString(6, category);
+            stmt.setInt(7, bookId);
 
             int rowsAffected = stmt.executeUpdate();
             return rowsAffected > 0;
@@ -123,13 +232,24 @@ public class BookRepository {
     }
 
     public boolean deleteBook(int bookId) {
+        // НОВАЯ ВАЛИДАЦИЯ
+        BookValidator validator = validatorFactory.getBookValidator();
+        ValidationResult bookIdResult = validator.validateBookId(bookId);
+
+        if (bookIdResult.hasErrors()) {
+            System.err.println("Book validation failed:");
+            for (String error : bookIdResult.getErrors()) {
+                System.err.println("  - " + error);
+            }
+            return false;
+        }
+
         String sql = "DELETE FROM book WHERE book_id = ?";
 
         try (Connection con = DatabaseConnection.getConnection();
              PreparedStatement stmt = con.prepareStatement(sql)) {
 
             stmt.setInt(1, bookId);
-
             int rowsAffected = stmt.executeUpdate();
             return rowsAffected > 0;
 
@@ -137,50 +257,5 @@ public class BookRepository {
             System.err.println("Error deleting book: " + e.getMessage());
             return false;
         }
-    }
-
-    public List<Book> searchBooks(String searchType, String searchTerm) {
-        List<Book> books = new ArrayList<>();
-        String sql;
-
-        // Строим SQL запрос в зависимости от типа поиска
-        switch (searchType.toLowerCase()) {
-            case "title":
-                sql = "SELECT book_id, name, author, description, available_copies, total_copies, category " +
-                        "FROM book WHERE LOWER(name) LIKE LOWER(?) ORDER BY book_id";
-                break;
-            case "author":
-                sql = "SELECT book_id, name, author, description, available_copies, total_copies, category " +
-                        "FROM book WHERE LOWER(author) LIKE LOWER(?) ORDER BY book_id";
-                break;
-            case "category":
-                sql = "SELECT book_id, name, author, description, available_copies,  category " +
-                        "FROM book WHERE LOWER(category) LIKE LOWER(?) ORDER BY book_id";
-                break;
-            default:
-                return books;
-        }
-
-        try (Connection con = DatabaseConnection.getConnection();
-             PreparedStatement stmt = con.prepareStatement(sql)) {
-
-            stmt.setString(1, "%" + searchTerm + "%");
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    books.add(new Book(
-                            rs.getInt("book_id"),
-                            rs.getString("name"),
-                            rs.getString("author"),
-                            rs.getString("description"),
-                            rs.getInt("available_copies"),
-                            rs.getString("category")
-                    ));
-                }
-            }
-        } catch (SQLException e) {
-            System.err.println("Error searching books: " + e.getMessage());
-        }
-        return books;
     }
 }
