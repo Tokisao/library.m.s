@@ -9,14 +9,14 @@ public class Book {
     private int total_copies;
     private String category;
 
-    public Book(int book_id, String name, String author, String description, int available_copies, String category) {
+    public Book(int book_id, String name, String author, String description, int available_copies, int total_copies, String category) {
         this.book_id = book_id;
         this.name = name;
         this.author=author;
         this.description=description;
         this.available_copies=available_copies;
+        this.total_copies = total_copies;
         this.category=category;
-        this.total_copies = available_copies;
     }
     @Override
     public String toString() {
@@ -41,4 +41,5 @@ public class Book {
     public String getCategory(){
         return category;
     }
+    public Integer getBorrowedCopies(){return total_copies-available_copies;}
 }
