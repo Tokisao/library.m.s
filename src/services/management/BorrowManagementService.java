@@ -28,11 +28,12 @@ public class BorrowManagementService {
         while (!back) {
             System.out.println("\n=== Borrow Management ===");
             System.out.println("1. View all borrows");
-            System.out.println("2. View overdue borrows");
-            System.out.println("3. Mark book as returned");
-            System.out.println("4. Mark book as lost");
-            System.out.println("5. Extend due date");
-            System.out.println("6. Back to main menu");
+            System.out.println("2. View full borrows info");
+            System.out.println("3. View overdue borrows");
+            System.out.println("4. Mark book as returned");
+            System.out.println("5. Mark book as lost");
+            System.out.println("6. Extend due date");
+            System.out.println("7. Back to main menu");
             System.out.print("Choose option: ");
 
             int choice = scanner.nextInt();
@@ -43,19 +44,21 @@ public class BorrowManagementService {
                     viewAllBorrows();
                     break;
                 case 2:
+                    viewFullAllBorrows();
+                case 3:
                     viewOverdueBorrows();
                     break;
-                case 3:
+                case 4:
                     markBookReturned(scanner);
                     break;
-                case 4:
+                case 5:
                     markBookLost(scanner);
                     break;
-                case 5:
+                case 6:
                     extendDueDate(scanner);
                     break;
-                case 6:
-                    back = true;
+                case 7:
+                    back=true;
                     break;
                 default:
                     System.out.println("Invalid choice!");
@@ -75,6 +78,16 @@ public class BorrowManagementService {
             return;
         }
         System.out.println("\n=== All Borrows ===");
+        borrows.forEach(System.out::println);
+    }
+
+    private void viewFullAllBorrows() {
+        List<Borrows.BorrowDetails> borrows = borrowRepository.getFullBorrowInfo();
+        if (borrows.isEmpty()) {
+            System.out.println("No borrows found.");
+            return;
+        }
+        System.out.println("\n=== Full Borrows ===");
         borrows.forEach(System.out::println);
     }
 
