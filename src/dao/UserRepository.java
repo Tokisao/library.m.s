@@ -110,6 +110,8 @@ public class UserRepository {
         }
         return users;
     }
+
+
     public boolean createUser(String userId, String password, String firstName,
                               String lastName, String phone, String role) {
         String sql = "INSERT INTO users (user_id, password, first_name, second_name, phone_number, role, fines) " +
